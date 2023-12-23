@@ -11,10 +11,14 @@ int pos = 0;
 
 int relay = 2;
 int value = 0;
+bool isAllowed = false;
+
+int firstI = -1;
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
 
 String receivedString = ""; // Initialize with an empty string
+bool isRemotelyOpened[7]; // Array to store conditions
 String cardIDs[7];
 
 void setup() {
@@ -51,12 +55,20 @@ void loop() {
     }
   }
 
-  for (const auto &allowedUID : cardIDs) {
-    if (cardUID.equals(allowedUID)) {
-      isAllowed = true;
-      break;
-    }
+  for (int i = 0; i < 7; i++) {
+
+    if (isRemotelyOpened[i]) {
+        isAllowed = true;
+        digitalWrite(ledGPin, HIGH);
+        digitalWrite(relay, LOW);
+        Serial.println("Successful");
+        tone(buzzerPin, 1000, 100); 
+        delay(5000);
+        digitalWrite(relay, HIGH);
+    } 
+
   }
+
 
   if ( ! mfrc522.PICC_IsNewCardPresent()) {
       return;
@@ -80,14 +92,30 @@ void loop() {
   // Print the UID to the serial monitor
   Serial.print("Card UID: ");
   Serial.println(cardUID);
-  
-  bool isAllowed = false;
-  for (const auto &allowedUID : cardIDs) {
-    if (cardUID.equals(allowedUID)) {
+
+
+  for(int i = 0; i < 7; i++) {
+    Serial.println(cardUID + " ID");
+    Serial.println(cardIDs[i] + " adadfdsf");
+
+    if(cardUID.equals(cardIDs[i])) {
       isAllowed = true;
       break;
     }
   }
+
+  // for (const auto &allowedUID : cardIDs) {
+  //   if (cardUID.equals(allowedUID)) {
+  //     isAllowed = true;
+  //     break;
+  //   }
+  // }
+
+  // for(const auto &condition : isRemotelyOpened) {
+  //   if(condition == true) {
+  //     isAllowed = condition;
+  //   }
+  // }
 
   if (!isAllowed) {
     digitalWrite(ledRPin, HIGH);
@@ -95,9 +123,11 @@ void loop() {
     Serial.println("Unsuccessful");
     delay(2000);
   } else {
+    Serial.println("Works wkwk");
     digitalWrite(ledGPin, HIGH);
     digitalWrite(relay, LOW);
     Serial.println("Successful");
+
     delay(2000);
     digitalWrite(relay, HIGH);
   }
@@ -105,7 +135,6 @@ void loop() {
   // Halt the card to stop further reads
   mfrc522.PICC_HaltA();
   // Stop encryption on the card
-  
   mfrc522.PCD_StopCrypto1();
   // Clear the UID to prepare for the next read
   mfrc522.uid.uidByte[0] = mfrc522.uid.uidByte[1] = mfrc522.uid.uidByte[2] = mfrc522.uid.uidByte[3] = 0;
@@ -116,8 +145,7 @@ void loop() {
 }
 
 void processReceivedString(String str) {
-  // Create an array to store card IDs
-  
+  // Create arrays to store card IDs and conditions
 
   // Split the received string by commas
   int index = 0;
@@ -128,10 +156,12 @@ void processReceivedString(String str) {
 
     if (index == -1) {
       // If no more commas are found, use the substring until the end of the string
-      cardIDs[i] = addPrefixIfMissing(str.substring(lastIndex));
+      cardIDs[i] = addPrefixIfMissing(getCardID(str.substring(lastIndex)));
+      isRemotelyOpened[i] = getCondition(str.substring(lastIndex));
     } else {
       // Use the substring between the last index and the current comma
-      cardIDs[i] = addPrefixIfMissing(str.substring(lastIndex, index));
+      cardIDs[i] = addPrefixIfMissing(getCardID(str.substring(lastIndex, index)));
+      isRemotelyOpened[i] = getCondition(str.substring(lastIndex, index));
       lastIndex = index + 1; // Move the last index to the character after the comma
     }
 
@@ -141,9 +171,11 @@ void processReceivedString(String str) {
     }
   }
 
-  // Print the full array
+  // Print the full arrays
   for (int i = 0; i < 7; i++) {
     Serial.print(cardIDs[i]);
+    Serial.print(":");
+    Serial.print(isRemotelyOpened[i] ? "true" : "false");
 
     // Print a comma after each element (except the last one)
     if (i < 6) {
@@ -153,6 +185,29 @@ void processReceivedString(String str) {
 
   // Print a new line at the end
   Serial.println();
+}
+
+bool getCondition(String cardInfo) {
+  // Extract the condition part before the colon ':'
+  int colonIndex = cardInfo.indexOf(':');
+  if (colonIndex != -1) {
+    String conditionStr = cardInfo.substring(colonIndex + 1);
+    return conditionStr.equalsIgnoreCase("true");
+  } else {
+    // If no colon is found, assume condition is false
+    return false;
+  }
+}
+
+String getCardID(String cardInfo) {
+  // Extract the cardID part before the colon ':'
+  int colonIndex = cardInfo.indexOf(':');
+  if (colonIndex != -1) {
+    return cardInfo.substring(0, colonIndex);
+  } else {
+    // If no colon is found, return the entire string
+    return cardInfo;
+  }
 }
 
 String addPrefixIfMissing(String cardID) {
